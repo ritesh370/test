@@ -34,8 +34,7 @@ jobs:
     - name: Install XFCE Desktop
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y \
-          xfce4 xfce4-goodies xorg dbus-x11 x11-xserver-utils wget curl
+        sudo apt-get install -y xfce4 xfce4-goodies xorg dbus-x11 x11-xserver-utils wget curl
 
     - name: Install Chrome Remote Desktop
       run: |
@@ -54,7 +53,8 @@ jobs:
         DISPLAY= /opt/google/chrome-remote-desktop/start-host \
         --code="4/0AeoWuM_sW4iXJnzU-qnq68dK4aemQMrupZ_-QDmWKfVTJAjw0V154OLU78F0e5TB54SECg" \
         --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
-        --name=$(hostname)
+        --name=$(hostname) \
+        --pin=123456
 
         sudo systemctl restart chrome-remote-desktop@$USER || true
 
