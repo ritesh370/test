@@ -51,7 +51,7 @@ jobs:
     - name: Start CRD
       run: |
         DISPLAY= /opt/google/chrome-remote-desktop/start-host \
-        --code="4/0AeoWuM_sW4iXJnzU-qnq68dK4aemQMrupZ_-QDmWKfVTJAjw0V154OLU78F0e5TB54SECg" \
+        --code="4/0AeoWuM__YCyJ5v_nira8lLZqLUozpqr0iHPQTxqytZhlh1ckFkCBZbE8HhPxkgB5I5d6xA" \
         --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
         --name=$(hostname) \
         --pin=123456
