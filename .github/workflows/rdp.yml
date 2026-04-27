@@ -1,4 +1,4 @@
-name: Chrome Remote Desktop
+name: Chrome Remote Desktop (Power User)
 
 on:
   workflow_dispatch:
@@ -6,62 +6,86 @@ on:
 jobs:
   crd:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 360 # Maximum allowed by GitHub
 
     steps:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Restore Files
+    - name: Restore Workspace (Persistent Files)
       uses: actions/cache@v3
       with:
         path: |
           ~/workdir
           ~/Desktop
           ~/Documents
-          ~/Downloads
-          ~/Pictures
-          ~/Videos
-          ~/Music
           ~/.config
           ~/.local/share
-          ~/tools
-          ~/projects
-        key: mydata-${{ github.run_id }}
+        key: user-data-${{ github.run_attempt }}
         restore-keys: |
-          mydata-
+          user-data-
 
-    - name: Install XFCE Desktop
+    - name: Install Desktop & CRD
       run: |
-        sudo apt-get update -y
-        sudo apt-get install -y xfce4 xfce4-goodies xorg dbus-x11 x11-xserver-utils wget curl
-
-    - name: Install Chrome Remote Desktop
-      run: |
+        sudo apt-get update
+        sudo apt-get install -y xfce4 xfce4-goodies xorg dbus-x11 x11-xserver-utils wget curl jq
         wget -q https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
-        sudo apt-get update -y
         sudo apt-get install -y ./chrome-remote-desktop_current_amd64.deb
 
-    - name: Setup Desktop
+    - name: Set User Password (Login: runner / Pass: 123456)
+      run: |
+        sudo usermod -aG sudo runner
+        echo "runner:123456" | sudo chpasswd
+
+    - name: Setup Desktop Session
       run: |
         echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" | sudo tee /etc/chrome-remote-desktop-session
         sudo groupadd chrome-remote-desktop || true
-        sudo usermod -aG chrome-remote-desktop $USER
+        sudo usermod -aG chrome-remote-desktop runner
 
     - name: Start CRD
+      env:
+        CRD_CONFIG: ${{ secrets.CRD_CONFIG }}
+        CRD_PIN: ${{ secrets.CRD_PIN }}
+        # Your specific code if secret is missing (fallback)
+        INITIAL_CODE: "4/0AeoWuM9B5uGFDDN8Rsp4LALJ7UkUeChOrHs-6cPp9i-NS_ggDNJRmO3Eyy-un-UPg1NfRg"
       run: |
-        DISPLAY= /opt/google/chrome-remote-desktop/start-host \
-        --code="4/0AeoWuM__YCyJ5v_nira8lLZqLUozpqr0iHPQTxqytZhlh1ckFkCBZbE8HhPxkgB5I5d6xA" \
-        --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
-        --name=$(hostname) \
-        --pin=123456
+        if [ -n "$CRD_CONFIG" ]; then
+          echo "[*] Permanent Config found. Restoring session..."
+          mkdir -p /home/runner/.config/chrome-remote-desktop
+          HOST_ID=$(echo $CRD_CONFIG | jq -r '.host_id')
+          echo "$CRD_CONFIG" > /home/runner/.config/chrome-remote-desktop/host#$HOST_ID.json
+          sudo chown -R runner:runner /home/runner/.config
+          
+          # Start Host
+          sudo /opt/google/chrome-remote-desktop/start-host \
+            --host-config-path=/home/runner/.config/chrome-remote-desktop/host#$HOST_ID.json \
+            --pin=${CRD_PIN:-123456}
+        else
+          echo "[!] No Secret found. Using Initial Code..."
+          DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+            --code="$INITIAL_CODE" \
+            --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
+            --name=$(hostname) \
+            --pin=123456
+          
+          echo "----------------------------------------------------------"
+          echo "WARNING: To make this permanent, copy this JSON to secret 'CRD_CONFIG':"
+          cat /home/runner/.config/chrome-remote-desktop/host#*.json
+          echo "----------------------------------------------------------"
+        fi
+        
+        sudo systemctl restart chrome-remote-desktop@runner || true
 
-        sudo systemctl restart chrome-remote-desktop@$USER || true
+    - name: Desktop Active (Keep Alive)
+      run: |
+        echo "RDP is ready! Connect at https://remotedesktop.google.com/access"
+        echo "Username: runner"
+        echo "Password: 123456"
+        # Keep the job running for 6 hours
+        sleep 21600
 
-    - name: Keep Alive
-      run: sleep 21000
-
-    - name: Save Files
+    - name: Save Workspace Changes
       if: always()
       uses: actions/cache@v3
       with:
@@ -69,12 +93,6 @@ jobs:
           ~/workdir
           ~/Desktop
           ~/Documents
-          ~/Downloads
-          ~/Pictures
-          ~/Videos
-          ~/Music
           ~/.config
           ~/.local/share
-          ~/tools
-          ~/projects
-        key: mydata-${{ github.run_id }}
+        key: user-data-${{ github.run_attempt }}
