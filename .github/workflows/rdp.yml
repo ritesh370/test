@@ -1,0 +1,56 @@
+name: Linux RDP Cloudflare
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+    - name: Update System
+      run: |
+        sudo apt-get update -y
+        sudo apt-get upgrade -y
+
+    - name: Install XFCE Desktop
+      run: |
+        sudo apt-get install -y \
+          xfce4 \
+          xfce4-goodies \
+          xrdp \
+          xorg \
+          dbus-x11
+
+    - name: Configure XRDP
+      run: |
+        sudo systemctl enable xrdp
+        sudo systemctl start xrdp
+        echo xfce4-session > ~/.xsession
+        sudo sed -i 's/port=3389/port=3389/' /etc/xrdp/xrdp.ini
+
+    - name: Set Password
+      run: |
+        echo "runner:Test@1234" | sudo chpasswd
+        sudo usermod -aG ssl-cert xrdp
+
+    - name: Install Cloudflare
+      run: |
+        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+        chmod +x cloudflared-linux-amd64
+        sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
+        cloudflared --version
+
+    - name: Start Cloudflare Tunnel
+      run: |
+        cloudflared tunnel --url tcp://localhost:3389 \
+          --no-autoupdate &
+        sleep 15
+        echo "=============================="
+        echo "Tunnel Started!"
+        echo "=============================="
+
+    - name: Keep Alive
+      run: |
+        sleep 21000
