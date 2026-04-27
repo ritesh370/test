@@ -1,56 +1,65 @@
-name: Linux RDP Cloudflare
+name: Chrome Remote Desktop
 
 on:
   workflow_dispatch:
 
 jobs:
-  rdp:
+  crd:
     runs-on: ubuntu-latest
     timeout-minutes: 350
 
     steps:
-    - name: Update System
-      run: |
-        sudo apt-get update -y
-        sudo apt-get upgrade -y
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Restore Files
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/workdir
+          ~/Desktop
+          ~/Documents
+        key: mydata-${{ github.run_id }}
+        restore-keys: |
+          mydata-
 
     - name: Install XFCE Desktop
       run: |
+        sudo apt-get update -y
         sudo apt-get install -y \
           xfce4 \
           xfce4-goodies \
-          xrdp \
           xorg \
-          dbus-x11
+          dbus-x11 \
+          x11-xserver-utils
 
-    - name: Configure XRDP
+    - name: Install Chrome Remote Desktop
       run: |
-        sudo systemctl enable xrdp
-        sudo systemctl start xrdp
-        echo xfce4-session > ~/.xsession
-        sudo sed -i 's/port=3389/port=3389/' /etc/xrdp/xrdp.ini
+        wget -q https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
+        sudo apt-get install -y ./chrome-remote-desktop_current_amd64.deb
 
-    - name: Set Password
+    - name: Setup Desktop
       run: |
-        echo "runner:Test@1234" | sudo chpasswd
-        sudo usermod -aG ssl-cert xrdp
+        echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" | \
+        sudo tee /etc/chrome-remote-desktop-session
+        sudo adduser $USER chrome-remote-desktop
 
-    - name: Install Cloudflare
+    - name: Start CRD
+      env:
+        CRD_CODE: ${{ secrets.CRD_CODE }}
       run: |
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-        chmod +x cloudflared-linux-amd64
-        sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
-        cloudflared --version
-
-    - name: Start Cloudflare Tunnel
-      run: |
-        cloudflared tunnel --url tcp://localhost:3389 \
-          --no-autoupdate &
-        sleep 15
-        echo "=============================="
-        echo "Tunnel Started!"
-        echo "=============================="
+        $CRD_CODE
+        sudo systemctl restart chrome-remote-desktop@$USER
 
     - name: Keep Alive
-      run: |
-        sleep 21000
+      run: sleep 21000
+
+    - name: Save Files
+      if: always()
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/workdir
+          ~/Desktop
+          ~/Documents
+        key: mydata-${{ github.run_id }}
